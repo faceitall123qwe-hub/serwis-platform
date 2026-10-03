@@ -35,6 +35,9 @@ metadata:
   name: serwis
   labels:
     {{- include "serwis.labels" . | nindent 4 }}
+  annotations:
+    # after the Deployment exists, otherwise Argo CD sees it as degraded and stops the sync
+    argocd.argoproj.io/sync-wave: "3"
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -56,6 +59,9 @@ metadata:
   name: serwis
   labels:
     {{- include "serwis.labels" . | nindent 4 }}
+  annotations:
+    # after the Deployment exists, otherwise Argo CD sees it as degraded and stops the sync
+    argocd.argoproj.io/sync-wave: "3"
 spec:
   minAvailable: 1
   selector:
