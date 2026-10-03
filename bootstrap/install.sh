@@ -24,9 +24,17 @@ if ! kubectl -n serwis get secret serwis-app >/dev/null 2>&1; then
     --from-literal=ADMIN_PASSWORD="$(openssl rand -base64 18)"
 fi
 
+# Grafana's chart would otherwise generate a new random password on every Argo CD render.
+kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+if ! kubectl -n monitoring get secret grafana-admin >/dev/null 2>&1; then
+  kubectl -n monitoring create secret generic grafana-admin \
+    --from-literal=admin-user=admin \
+    --from-literal=admin-password="$(openssl rand -base64 18)"
+fi
+
 helm template root apps --set repoURL="$REPO_URL" --set revision="$REVISION" \
   --show-only templates/root.yaml | kubectl apply -f -
 
-echo "Argo CD is syncing revision $REVISION. Admin password:"
-kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d
-echo
+echo "Argo CD is syncing revision $REVISION."
+echo "Argo CD  admin / $(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d)"
+echo "Grafana  admin / $(kubectl -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d)"

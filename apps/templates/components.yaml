@@ -121,6 +121,10 @@ spec:
             ruleSelectorNilUsesHelmValues: false
             resources: { requests: { cpu: 100m, memory: 400Mi } }
         grafana:
+          admin:
+            existingSecret: grafana-admin   # created by bootstrap/install.sh
+            userKey: admin-user
+            passwordKey: admin-password
           ingress:
             enabled: true
             ingressClassName: nginx
