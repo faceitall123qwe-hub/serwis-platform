@@ -153,15 +153,14 @@ spec:
         backgroundController: { replicas: 1 }
         cleanupController: { replicas: 1 }
         reportsController: { replicas: 1 }
+        # Without these the subchart renders `labels: {}` on its CRDs; the API server
+        # drops empty maps and Argo CD would report the app as permanently OutOfSync.
+        kyverno-api:
+          labels: { app.kubernetes.io/part-of: kyverno }
+          annotations: { platform.serwis/managed-by: argocd }
   destination:
     server: https://kubernetes.default.svc
     namespace: kyverno
-  # The chart renders `labels: {}` on its CRDs; the API server drops empty maps,
-  # which would otherwise leave the app permanently OutOfSync.
-  ignoreDifferences:
-    - group: apiextensions.k8s.io
-      kind: CustomResourceDefinition
-      jsonPointers: [/metadata/labels]
   {{- include "app.syncPolicy" . }}
 ---
 # ---------- wave -1: platform config that needs the CRDs above ----------
