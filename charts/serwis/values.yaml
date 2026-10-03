@@ -6,8 +6,6 @@ image:
 
 host: serwis.127.0.0.1.nip.io
 
-replicas: 2
-
 autoscaling:
   minReplicas: 2
   maxReplicas: 5

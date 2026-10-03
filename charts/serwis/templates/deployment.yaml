@@ -8,7 +8,8 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "2"
 spec:
-  replicas: {{ .Values.replicas }}
+  # No `replicas`: the HPA owns the replica count; setting it here would make
+  # Argo CD fight the autoscaler on every scale event.
   revisionHistoryLimit: 3
   strategy:
     rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
