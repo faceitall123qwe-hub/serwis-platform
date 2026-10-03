@@ -1,29 +1,40 @@
-# Only images built and signed by the serwis CI pipeline (keyless cosign,
-# GitHub OIDC identity) may run. A locally built or tampered image is rejected.
-apiVersion: kyverno.io/v1
-kind: ClusterPolicy
+# Only images built and signed by the serwis CI pipeline (keyless cosign with the
+# GitHub Actions OIDC identity) may run. A locally built or tampered image is rejected.
+apiVersion: policies.kyverno.io/v1
+kind: ImageValidatingPolicy
 metadata:
   name: verify-serwis-images
-  annotations:
-    policies.kyverno.io/title: Verify image signatures
 spec:
-  webhookTimeoutSeconds: 30
-  rules:
-    - name: signed-by-serwis-ci
-      match:
-        any:
-          - resources:
-              kinds: [Pod]
-      verifyImages:
-        - imageReferences:
-            - "ghcr.io/faceitall123qwe-hub/*"
-          failureAction: Enforce
-          mutateDigest: false
-          verifyDigest: false
-          attestors:
-            - entries:
-                - keyless:
-                    issuer: https://token.actions.githubusercontent.com
-                    subject: https://github.com/faceitall123qwe-hub/serwis/.github/workflows/image.yml@refs/heads/main
-                    rekor:
-                      url: https://rekor.sigstore.dev
+  validationActions: [Deny]
+  webhookConfiguration:
+    timeoutSeconds: 30
+  # Check Pods only and don't rewrite images to digests, so Argo CD's view of
+  # Deployments stays identical to git.
+  autogen:
+    podControllers:
+      controllers: []
+  validationConfigurations:
+    mutateDigest: false
+    verifyDigest: false
+    required: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  matchImageReferences:
+    - glob: "ghcr.io/faceitall123qwe-hub/*"
+  attestors:
+    - name: ci
+      cosign:
+        keyless:
+          identities:
+            - issuer: https://token.actions.githubusercontent.com
+              subject: https://github.com/faceitall123qwe-hub/serwis/.github/workflows/image.yml@refs/heads/main
+        ctlog:
+          url: https://rekor.sigstore.dev
+  validations:
+    - message: Image is not signed by the serwis CI workflow on main.
+      expression: >-
+        images.containers.map(image, verifyImageSignatures(image, [attestors.ci])).all(e, e > 0)
