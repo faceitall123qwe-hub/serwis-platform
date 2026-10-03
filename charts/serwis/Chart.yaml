@@ -3,4 +3,4 @@ name: serwis
 description: serwis web app with its Postgres cluster, migrations, autoscaling and network policies
 type: application
 version: 0.1.0
-appVersion: "sha-2071f5d"
+appVersion: "sha-8a5d371"

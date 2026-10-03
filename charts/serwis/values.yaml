@@ -1,7 +1,7 @@
 image:
   repository: ghcr.io/faceitall123qwe-hub/serwis
   migrateRepository: ghcr.io/faceitall123qwe-hub/serwis-migrate
-  tag: sha-2071f5d
+  tag: sha-8a5d371
   pullPolicy: IfNotPresent
 
 host: serwis.127.0.0.1.nip.io
