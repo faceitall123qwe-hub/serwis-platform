@@ -1,0 +1,29 @@
+# Only images built and signed by the serwis CI pipeline (keyless cosign,
+# GitHub OIDC identity) may run. A locally built or tampered image is rejected.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: verify-serwis-images
+  annotations:
+    policies.kyverno.io/title: Verify image signatures
+spec:
+  webhookTimeoutSeconds: 30
+  rules:
+    - name: signed-by-serwis-ci
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      verifyImages:
+        - imageReferences:
+            - "ghcr.io/faceitall123qwe-hub/*"
+          failureAction: Enforce
+          mutateDigest: false
+          verifyDigest: false
+          attestors:
+            - entries:
+                - keyless:
+                    issuer: https://token.actions.githubusercontent.com
+                    subject: https://github.com/faceitall123qwe-hub/serwis/.github/workflows/image.yml@refs/heads/main
+                    rekor:
+                      url: https://rekor.sigstore.dev

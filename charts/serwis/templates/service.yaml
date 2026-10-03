@@ -1,0 +1,63 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: serwis
+  labels:
+    {{- include "serwis.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: serwis
+  ports:
+    - { name: http, port: 80, targetPort: http }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: serwis
+  labels:
+    {{- include "serwis.labels" . | nindent 4 }}
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: {{ .Values.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: serwis
+                port: { name: http }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: serwis
+  labels:
+    {{- include "serwis.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: serwis
+  minReplicas: {{ .Values.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.targetCPUUtilization }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: serwis
+  labels:
+    {{- include "serwis.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: serwis

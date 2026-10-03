@@ -1,0 +1,4 @@
+apiVersion: v2
+name: apps
+description: App of apps - every component of the platform as an Argo CD Application
+version: 0.1.0

@@ -1,0 +1,27 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: serwis-db
+  labels:
+    {{- include "serwis.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  instances: {{ .Values.database.instances }}
+  imageName: ghcr.io/cloudnative-pg/postgresql:16
+  storage:
+    size: {{ .Values.database.storage }}
+  resources:
+    {{- toYaml .Values.database.resources | nindent 4 }}
+  bootstrap:
+    initdb:
+      database: serwis
+      owner: serwis
+  postgresql:
+    parameters:
+      log_min_duration_statement: "500"
+  monitoring:
+    enablePodMonitor: true
+  affinity:
+    enablePodAntiAffinity: true
+    topologyKey: kubernetes.io/hostname

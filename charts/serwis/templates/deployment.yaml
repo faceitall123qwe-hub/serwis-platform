@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: serwis
+  labels:
+    {{- include "serwis.labels" . | nindent 4 }}
+    app.kubernetes.io/name: serwis
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  replicas: {{ .Values.replicas }}
+  revisionHistoryLimit: 3
+  strategy:
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: serwis
+  template:
+    metadata:
+      labels:
+        {{- include "serwis.labels" . | nindent 8 }}
+        app.kubernetes.io/name: serwis
+    spec:
+      {{- include "serwis.podSecurity" . | nindent 6 }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: serwis
+      containers:
+        - name: web
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- include "serwis.containerSecurity" . | nindent 10 }}
+          ports:
+            - { name: http, containerPort: 3000 }
+          env:
+            {{- include "serwis.dbEnv" . | nindent 12 }}
+            - name: NEXT_PUBLIC_SITE_URL
+              value: "http://{{ .Values.host }}"
+            {{- range $k, $v := .Values.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.appSecret }}
+          startupProbe:
+            httpGet: { path: /api/health, port: http }
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet: { path: /api/health, port: http }
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: "/api/health?ready=1", port: http }
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            # Next.js writes its image/fetch cache here; the rest of the filesystem is read-only.
+            - { name: next-cache, mountPath: /app/.next/cache }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: next-cache, emptyDir: {} }
+        - { name: tmp, emptyDir: {} }

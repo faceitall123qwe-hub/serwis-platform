@@ -1,0 +1,47 @@
+# Applies the schema and seeds reference data before the new app version rolls out.
+# Idempotent: drizzle push only diffs, the seed uses ON CONFLICT DO NOTHING.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: serwis-migrate
+  labels:
+    {{- include "serwis.labels" . | nindent 4 }}
+    app.kubernetes.io/name: serwis-migrate
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 10
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        {{- include "serwis.labels" . | nindent 8 }}
+        app.kubernetes.io/name: serwis-migrate
+    spec:
+      restartPolicy: OnFailure
+      {{- include "serwis.podSecurity" . | nindent 6 }}
+      containers:
+        - name: migrate
+          image: "{{ .Values.image.migrateRepository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- include "serwis.containerSecurity" . | nindent 10 }}
+          env:
+            {{- include "serwis.dbEnv" . | nindent 12 }}
+            - name: HOME
+              value: /tmp
+            {{- range $k, $v := .Values.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.appSecret }}
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { cpu: "1", memory: 768Mi }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }

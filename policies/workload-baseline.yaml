@@ -1,0 +1,82 @@
+# Baseline rules for application workloads in the serwis namespace.
+# Database pods are created by the CloudNativePG operator and are excluded by label.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: serwis-workload-baseline
+  annotations:
+    policies.kyverno.io/title: Workload baseline
+    policies.kyverno.io/description: >-
+      Pinned image tags, resource requests and limits, and non-root containers
+      for everything deployed into the serwis namespace.
+spec:
+  background: true
+  rules:
+    - name: disallow-latest-tag
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [serwis]
+      validate:
+        failureAction: Enforce
+        message: "Images must use a pinned tag, not ':latest' or no tag."
+        foreach:
+          - list: "request.object.spec.[containers, initContainers][]"
+            deny:
+              conditions:
+                any:
+                  - key: "{{ element.image }}"
+                    operator: Equals
+                    value: "*:latest"
+                  - key: "{{ contains(element.image, ':') }}"
+                    operator: Equals
+                    value: false
+
+    - name: require-requests-and-limits
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [serwis]
+      exclude:
+        any:
+          - resources:
+              selector:
+                matchExpressions:
+                  - { key: cnpg.io/cluster, operator: Exists }
+      validate:
+        failureAction: Enforce
+        message: "CPU and memory requests and a memory limit are required."
+        pattern:
+          spec:
+            containers:
+              - resources:
+                  requests:
+                    cpu: "?*"
+                    memory: "?*"
+                  limits:
+                    memory: "?*"
+
+    - name: require-non-root
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [serwis]
+      exclude:
+        any:
+          - resources:
+              selector:
+                matchExpressions:
+                  - { key: cnpg.io/cluster, operator: Exists }
+      validate:
+        failureAction: Enforce
+        message: "Pods must set runAsNonRoot and containers must not allow privilege escalation."
+        pattern:
+          spec:
+            securityContext:
+              runAsNonRoot: true
+            containers:
+              - securityContext:
+                  allowPrivilegeEscalation: false

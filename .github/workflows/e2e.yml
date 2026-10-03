@@ -1,0 +1,60 @@
+name: e2e
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: helm lint
+        run: |
+          helm lint charts/serwis
+          helm lint apps
+      - name: render and validate manifests
+        run: |
+          curl -sL https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz | tar xz
+          helm template serwis charts/serwis > /tmp/serwis.yaml
+          ./kubeconform -strict -summary -ignore-missing-schemas /tmp/serwis.yaml
+
+  cluster:
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+
+      - uses: helm/kind-action@v1
+        with:
+          config: cluster/kind.yaml
+          cluster_name: serwis
+
+      - name: bootstrap Argo CD at this commit
+        env:
+          REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: bash bootstrap/install.sh
+
+      - name: wait for every application to be synced and healthy
+        run: bash tests/wait-for-apps.sh 1500
+
+      - name: smoke and policy tests
+        run: bash tests/smoke.sh
+
+      - name: diagnostics
+        if: failure()
+        run: |
+          kubectl -n argocd get applications.argoproj.io -o wide || true
+          for a in $(kubectl -n argocd get applications.argoproj.io -o name); do
+            kubectl -n argocd get "$a" -o jsonpath='{.metadata.name}{": "}{.status.conditions}{" "}{.status.operationState.message}{"\n"}'
+          done
+          kubectl get pods -A -o wide
+          kubectl -n serwis describe pods | tail -120
+          kubectl -n serwis logs job/serwis-migrate --tail=80 || true
+          kubectl -n serwis logs deploy/serwis --tail=80 || true
+          kubectl get events -A --sort-by=.lastTimestamp | tail -60

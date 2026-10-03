@@ -1,0 +1,69 @@
+# SLO: 99% of requests to serwis succeed (non-5xx), measured at the ingress.
+# Multi-window, multi-burn-rate alerts from the Google SRE workbook:
+#   critical when the error budget burns 14.4x too fast (1h and 5m windows)
+#   warning  when it burns 6x too fast (6h and 30m windows)
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: serwis-slo
+spec:
+  groups:
+    - name: serwis-slo.recording
+      rules:
+        - record: serwis:error_ratio:rate5m
+          expr: |
+            sum(rate(nginx_ingress_controller_requests{ingress="serwis",status=~"5.."}[5m]))
+            / clamp_min(sum(rate(nginx_ingress_controller_requests{ingress="serwis"}[5m])), 1e-9)
+        - record: serwis:error_ratio:rate30m
+          expr: |
+            sum(rate(nginx_ingress_controller_requests{ingress="serwis",status=~"5.."}[30m]))
+            / clamp_min(sum(rate(nginx_ingress_controller_requests{ingress="serwis"}[30m])), 1e-9)
+        - record: serwis:error_ratio:rate1h
+          expr: |
+            sum(rate(nginx_ingress_controller_requests{ingress="serwis",status=~"5.."}[1h]))
+            / clamp_min(sum(rate(nginx_ingress_controller_requests{ingress="serwis"}[1h])), 1e-9)
+        - record: serwis:error_ratio:rate6h
+          expr: |
+            sum(rate(nginx_ingress_controller_requests{ingress="serwis",status=~"5.."}[6h]))
+            / clamp_min(sum(rate(nginx_ingress_controller_requests{ingress="serwis"}[6h])), 1e-9)
+        - record: serwis:latency_p95:rate5m
+          expr: |
+            histogram_quantile(0.95,
+              sum by (le) (rate(nginx_ingress_controller_request_duration_seconds_bucket{ingress="serwis"}[5m])))
+
+    - name: serwis-slo.alerts
+      rules:
+        - alert: SerwisErrorBudgetFastBurn
+          expr: serwis:error_ratio:rate1h > (14.4 * 0.01) and serwis:error_ratio:rate5m > (14.4 * 0.01)
+          for: 2m
+          labels: { severity: critical }
+          annotations:
+            summary: serwis is burning its error budget 14x too fast
+            description: "5xx ratio {{ $value | humanizePercentage }} over 1h. At this rate the monthly budget is gone in about 2 days."
+        - alert: SerwisErrorBudgetSlowBurn
+          expr: serwis:error_ratio:rate6h > (6 * 0.01) and serwis:error_ratio:rate30m > (6 * 0.01)
+          for: 15m
+          labels: { severity: warning }
+          annotations:
+            summary: serwis is burning its error budget 6x too fast
+        - alert: SerwisHighLatency
+          expr: serwis:latency_p95:rate5m > 1
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "serwis p95 latency is {{ $value | humanizeDuration }}"
+
+    - name: serwis-db.alerts
+      rules:
+        - alert: SerwisDatabaseDown
+          expr: absent(cnpg_collector_up{cluster="serwis-db"} == 1)
+          for: 2m
+          labels: { severity: critical }
+          annotations:
+            summary: No healthy serwis-db Postgres instance is being scraped
+        - alert: SerwisDatabaseReplicationLag
+          expr: max(cnpg_pg_replication_lag{cluster="serwis-db"}) > 30
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: "serwis-db replica is {{ $value }}s behind the primary"

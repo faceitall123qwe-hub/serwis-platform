@@ -1,0 +1,33 @@
+image:
+  repository: ghcr.io/faceitall123qwe-hub/serwis
+  migrateRepository: ghcr.io/faceitall123qwe-hub/serwis-migrate
+  tag: sha-2071f5d
+  pullPolicy: IfNotPresent
+
+host: serwis.127.0.0.1.nip.io
+
+replicas: 2
+
+autoscaling:
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilization: 70
+
+resources:
+  requests: { cpu: 100m, memory: 192Mi }
+  limits: { cpu: "1", memory: 384Mi }
+
+env:
+  BASE_LAT: "52.321"
+  BASE_LNG: "20.9876"
+  SERVICE_RADIUS_KM: "50"
+
+# Secret with SESSION_SECRET, IP_HASH_SALT, ADMIN_EMAIL, ADMIN_PASSWORD (created by bootstrap/install.sh)
+appSecret: serwis-app
+
+database:
+  instances: 2
+  storage: 1Gi
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 512Mi }

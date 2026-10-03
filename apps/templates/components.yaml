@@ -1,0 +1,215 @@
+{{- define "app.syncPolicy" }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
+{{- end }}
+# ---------- wave -2: operators and controllers ----------
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ingress-nginx
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  project: default
+  source:
+    repoURL: https://kubernetes.github.io/ingress-nginx
+    chart: ingress-nginx
+    targetRevision: 4.15.1
+    helm:
+      valuesObject:
+        controller:
+          hostPort: { enabled: true }
+          service: { type: NodePort }
+          nodeSelector: { ingress-ready: "true" }
+          tolerations:
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists
+              effect: NoSchedule
+          watchIngressWithoutClass: true
+          metrics:
+            enabled: true
+            serviceMonitor:
+              enabled: true
+              additionalLabels: { release: kube-prometheus-stack }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ingress-nginx
+  {{- include "app.syncPolicy" . }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: metrics-server
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  project: default
+  source:
+    repoURL: https://kubernetes-sigs.github.io/metrics-server/
+    chart: metrics-server
+    targetRevision: 3.14.0
+    helm:
+      valuesObject:
+        args: [--kubelet-insecure-tls]   # kind's kubelets use self-signed certs
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  {{- include "app.syncPolicy" . }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cloudnative-pg
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  project: default
+  source:
+    repoURL: https://cloudnative-pg.github.io/charts
+    chart: cloudnative-pg
+    targetRevision: 0.29.1
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cnpg-system
+  {{- include "app.syncPolicy" . }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: 91.9.0
+    helm:
+      valuesObject:
+        # Control-plane components aren't reachable for scraping in kind.
+        kubeEtcd: { enabled: false }
+        kubeControllerManager: { enabled: false }
+        kubeScheduler: { enabled: false }
+        kubeProxy: { enabled: false }
+        alertmanager:
+          alertmanagerSpec:
+            resources: { requests: { cpu: 10m, memory: 32Mi } }
+        prometheus:
+          prometheusSpec:
+            retention: 2d
+            serviceMonitorSelectorNilUsesHelmValues: false
+            podMonitorSelectorNilUsesHelmValues: false
+            ruleSelectorNilUsesHelmValues: false
+            resources: { requests: { cpu: 100m, memory: 400Mi } }
+        grafana:
+          ingress:
+            enabled: true
+            ingressClassName: nginx
+            hosts: [grafana.127.0.0.1.nip.io]
+          sidecar:
+            dashboards:
+              enabled: true
+              searchNamespace: ALL
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  {{- include "app.syncPolicy" . }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kyverno
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  project: default
+  source:
+    repoURL: https://kyverno.github.io/kyverno
+    chart: kyverno
+    targetRevision: 3.9.1
+    helm:
+      valuesObject:
+        admissionController: { replicas: 1 }
+        backgroundController: { replicas: 1 }
+        cleanupController: { replicas: 1 }
+        reportsController: { replicas: 1 }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kyverno
+  {{- include "app.syncPolicy" . }}
+---
+# ---------- wave -1: platform config that needs the CRDs above ----------
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: policies
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: default
+  source:
+    repoURL: {{ .Values.repoURL }}
+    targetRevision: {{ .Values.revision }}
+    path: policies
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kyverno
+  {{- include "app.syncPolicy" . }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: default
+  source:
+    repoURL: {{ .Values.repoURL }}
+    targetRevision: {{ .Values.revision }}
+    path: monitoring
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  {{- include "app.syncPolicy" . }}
+---
+# ---------- wave 0: the application ----------
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: serwis
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  source:
+    repoURL: {{ .Values.repoURL }}
+    targetRevision: {{ .Values.revision }}
+    path: charts/serwis
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: serwis
+  {{- include "app.syncPolicy" . }}
