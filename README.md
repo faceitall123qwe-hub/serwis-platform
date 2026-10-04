@@ -10,6 +10,16 @@ alerts based on an SLO rather than CPU graphs.
 On every push, CI creates a fresh 3-node cluster, installs the whole platform from scratch
 through Argo CD at that exact commit, and runs end-to-end and policy tests against it.
 
+| Argo CD: the serwis app, from ingress to Postgres | Grafana: SLO dashboard |
+|---|---|
+| ![](docs/argocd.png) | ![](docs/grafana.png) |
+
+<details><summary>All platform components in Argo CD</summary>
+
+![](docs/argocd-apps.png)
+
+</details>
+
 ```mermaid
 flowchart LR
     subgraph serwis repo
@@ -45,8 +55,8 @@ flowchart LR
 
 **Supply chain.** The image is built in the serwis repo, scanned with Trivy (the build fails on
 fixable critical CVEs) and signed with cosign using GitHub's OIDC identity, so there's no
-signing key to leak. In the cluster, Kyverno refuses any `ghcr.io/faceitall123qwe-hub/*` image
-that wasn't signed by that exact workflow on `main`. The first time this pipeline ran, Trivy
+signing key to leak. In the cluster, a Kyverno `ImageValidatingPolicy` refuses any
+`ghcr.io/faceitall123qwe-hub/*` image that wasn't signed by that exact workflow on `main`. The first time this pipeline ran, Trivy
 stopped the build on three critical RCEs in the Next.js version I was using, which is how they
 got patched.
 
@@ -59,14 +69,15 @@ version rolls out. Both steps are idempotent, so re-syncing is safe.
 
 **Workload hardening.** Non-root user with a fixed UID, read-only root filesystem (only the
 Next.js cache and `/tmp` are writable), all capabilities dropped, seccomp `RuntimeDefault`.
-Kyverno enforces pinned tags, requests/limits and non-root for anything in the namespace, so
-these can't quietly regress.
+A Kyverno `ValidatingPolicy` (CEL) enforces pinned tags, requests/limits and non-root for
+anything in the namespace, so these can't quietly regress.
 
 **Network.** Inbound traffic is denied by default. The app only accepts traffic from the
 ingress controller; Postgres only from the app, the migration Job, its own replicas, the
 operator and Prometheus.
 
-**Availability.** Two replicas spread across nodes, a PodDisruptionBudget, HPA on CPU,
+**Availability.** At least two replicas spread across nodes, a PodDisruptionBudget, HPA on CPU
+(the Deployment deliberately has no `replicas` field, so Argo CD doesn't fight the autoscaler),
 startup/liveness/readiness probes (readiness checks the database), and zero-downtime rolling
 updates (`maxUnavailable: 0`).
 
@@ -87,8 +98,10 @@ make test    # smoke and policy tests
 | | URL |
 |---|---|
 | App | http://serwis.127.0.0.1.nip.io |
-| Argo CD | http://argocd.127.0.0.1.nip.io (admin, password printed by `make up`) |
-| Grafana | http://grafana.127.0.0.1.nip.io (admin / prom-operator) |
+| Argo CD | http://argocd.127.0.0.1.nip.io |
+| Grafana | http://grafana.127.0.0.1.nip.io (dashboard "serwis") |
+
+Both log in as `admin`; `make up` prints the generated passwords.
 
 `make down` deletes the cluster.
 
