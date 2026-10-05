@@ -1,8 +1,8 @@
-# serwis-platform
+# repair-shop-k8s-platform
 
-[![e2e](https://github.com/faceitall123qwe-hub/serwis-platform/actions/workflows/e2e.yml/badge.svg)](https://github.com/faceitall123qwe-hub/serwis-platform/actions/workflows/e2e.yml)
+[![e2e](https://github.com/faceitall123qwe-hub/repair-shop-k8s-platform/actions/workflows/e2e.yml/badge.svg)](https://github.com/faceitall123qwe-hub/repair-shop-k8s-platform/actions/workflows/e2e.yml)
 
-Runs [serwis](https://github.com/faceitall123qwe-hub/serwis) (a Next.js + Postgres app) on
+Runs [repair-shop-app](https://github.com/faceitall123qwe-hub/repair-shop-app) (a Next.js + Postgres app) on
 Kubernetes the way I'd want a small production setup to look: everything in git, deployed by
 Argo CD, a replicated Postgres managed by an operator, only signed images allowed to run, and
 alerts based on an SLO rather than CPU graphs.
@@ -114,7 +114,7 @@ Both log in as `admin`; `make up` prints the generated passwords.
 - TLS on the ingress with cert-manager, and Grafana/Argo CD behind SSO.
 - Image updates: tags are bumped by hand right now; Renovate or Argo CD Image Updater would
   open the PR instead.
-- The cluster itself: [serwis-infra](https://github.com/faceitall123qwe-hub/serwis-infra) has
+- The cluster itself: [repair-shop-aws-terraform](https://github.com/faceitall123qwe-hub/repair-shop-aws-terraform) has
   the AWS side in Terraform; an EKS module would replace kind.
 
 ## License

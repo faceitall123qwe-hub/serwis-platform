@@ -31,10 +31,10 @@ spec:
         keyless:
           identities:
             - issuer: https://token.actions.githubusercontent.com
-              subject: https://github.com/faceitall123qwe-hub/serwis/.github/workflows/image.yml@refs/heads/main
+              subject: https://github.com/faceitall123qwe-hub/repair-shop-app/.github/workflows/image.yml@refs/heads/main
         ctlog:
           url: https://rekor.sigstore.dev
   validations:
-    - message: Image is not signed by the serwis CI workflow on main.
+    - message: Image is not signed by the repair-shop-app CI workflow on main.
       expression: >-
         images.containers.map(image, verifyImageSignatures(image, [attestors.ci])).all(e, e > 0)

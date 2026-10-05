@@ -3,7 +3,7 @@
 # REVISION selects the git revision Argo CD deploys (defaults to main).
 set -euo pipefail
 
-REPO_URL="${REPO_URL:-https://github.com/faceitall123qwe-hub/serwis-platform.git}"
+REPO_URL="${REPO_URL:-https://github.com/faceitall123qwe-hub/repair-shop-k8s-platform.git}"
 REVISION="${REVISION:-main}"
 cd "$(dirname "$0")/.."
 
